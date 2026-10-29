@@ -1,0 +1,68 @@
+# Builds Clawd for each push to main and publishes it as a GitHub release with a Sparkle appcast.
+# Installed copies read releases/latest/download/appcast.xml and update themselves.
+# This workflow does not run on pull requests.
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # build.sh uses the commit count as the build number.
+          fetch-depth: 0
+
+      - name: Build
+        run: ./build.sh
+
+      - name: Package and sign
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          plist=build/Clawd.app/Contents/Info.plist
+          version=$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$plist")
+          build=$(/usr/libexec/PlistBuddy -c 'Print CFBundleVersion' "$plist")
+          minimum=$(/usr/libexec/PlistBuddy -c 'Print LSMinimumSystemVersion' "$plist")
+          tag="v$version"
+          zip="Clawd-$version.zip"
+          ditto -c -k --sequesterRsrc --keepParent build/Clawd.app "build/$zip"
+          # Prints sparkle:edSignature="…" length="…" for the enclosure.
+          signature=$(echo "$SPARKLE_PRIVATE_KEY" | .build/artifacts/sparkle/Sparkle/bin/sign_update --ed-key-file - "build/$zip")
+          url="https://github.com/$GITHUB_REPOSITORY/releases/download/$tag/$zip"
+          cat > build/appcast.xml <<XML
+          <?xml version="1.0" encoding="utf-8"?>
+          <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+            <channel>
+              <title>Clawd</title>
+              <item>
+                <title>Clawd $version</title>
+                <link>https://github.com/$GITHUB_REPOSITORY/releases/tag/$tag</link>
+                <pubDate>$(LC_ALL=C date -u '+%a, %d %b %Y %H:%M:%S +0000')</pubDate>
+                <sparkle:version>$build</sparkle:version>
+                <sparkle:shortVersionString>$version</sparkle:shortVersionString>
+                <sparkle:minimumSystemVersion>$minimum</sparkle:minimumSystemVersion>
+                <enclosure url="$url" type="application/octet-stream" $signature/>
+              </item>
+            </channel>
+          </rss>
+          XML
+          echo "tag=$tag" >> "$GITHUB_ENV"
+          echo "zip=$zip" >> "$GITHUB_ENV"
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$tag" "build/$zip" build/appcast.xml \
+            --target "$GITHUB_SHA" --title "Clawd ${tag#v}" --generate-notes --latest
