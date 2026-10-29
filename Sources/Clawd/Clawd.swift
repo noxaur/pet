@@ -39,6 +39,8 @@ final class Clawd: NSObject {
     var costume: Costume = .none
     var baseCostume: Costume = .none
     var lookAtMouse = true
+    var sitting = false
+    var laptopFrame: Int?
 
     var onGrab: (() -> Void)?
     var onThrownLanding: ((CGFloat) -> Void)?
@@ -216,6 +218,8 @@ final class Clawd: NSObject {
         alpha = 1
         costume = baseCostume
         lookAtMouse = true
+        sitting = false
+        laptopFrame = nil
         if !grounded && !held { platform = nil }
     }
 
@@ -312,6 +316,10 @@ final class Clawd: NSObject {
             return
         }
 
+        // Dropped below the floor, such as beside the Dock, he hops back up so the floor can catch him.
+        if vy <= 0, y < floorY - 0.5, platforms.contains(where: { $0.window == nil && $0.holds(x) }) {
+            vy = sqrt(2 * Self.gravity * (floorY - y + 24))
+        }
         vy -= Self.gravity * dt
         let next = y + vy * dt
         x += vx * dt
@@ -412,6 +420,9 @@ final class Clawd: NSObject {
             pose.legs = Int(time * 8) % 2 + 1
         } else {
             pose.legs = legs ?? (moved > 0.05 ? (Int(walked / 9) % 2 + 1) : 0)
+            pose.turned = legs == nil && moved > 0.05
+            pose.sitting = sitting && !pose.turned
+            pose.laptopFrame = pose.sitting ? laptopFrame : nil
         }
         pose.armPhase = Int(time / 0.2) % 2 == 0
         pose.mouth = mouth > 0 ? mouth : (bubble != nil && Int(time / 0.14) % 3 == 0 ? 1 : 0)

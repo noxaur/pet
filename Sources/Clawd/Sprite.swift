@@ -17,20 +17,25 @@ struct Pose: Equatable {
     var scale: CGFloat = 1
     var costume: Costume = .none
     var alpha: CGFloat = 1
+    var turned = false
+    var sitting = false
+    var laptopFrame: Int?
 }
 
-/// Clawd, drawn from the same 18 × 10 pixel grid as the terminal mascot: a wide body,
-/// two slit eyes, two stubby arms and four legs. Rows count down from the top of the body.
+/// Clawd on the 12 × 8 pixel grid of the official Claude Code art: an 8-wide body, two square eyes,
+/// stubby arms and four legs. Rows count down from the top of the body; fractions draw finer detail.
 enum Sprite {
-    static let pixel: CGFloat = 5
-    static let columns = 18
-    static let rows = 10
+    static let pixel: CGFloat = 6
+    static let columns = 12
+    static let rows = 8
     static var size: CGSize { CGSize(width: CGFloat(columns) * pixel, height: CGFloat(rows) * pixel) }
 
-    static let body = CGColor(srgbRed: 0.851, green: 0.467, blue: 0.341, alpha: 1)
-    static let ink = CGColor(srgbRed: 0.11, green: 0.07, blue: 0.06, alpha: 1)
+    // Colours of the official animation as Clawd decodes and draws it, so walking and typing match.
+    static let body = CGColor(srgbRed: 219 / 255, green: 128 / 255, blue: 95 / 255, alpha: 1)
+    static let shade = CGColor(srgbRed: 196 / 255, green: 114 / 255, blue: 84 / 255, alpha: 1)
+    static let ink = CGColor(srgbRed: 0, green: 0, blue: 0, alpha: 1)
     static let white = CGColor(srgbRed: 1, green: 0.98, blue: 0.95, alpha: 1)
-    static let hat = CGColor(srgbRed: 0.18, green: 0.13, blue: 0.25, alpha: 1)
+    static let laptop = ink
     static let pumpkin = CGColor(srgbRed: 0.95, green: 0.64, blue: 0.23, alpha: 1)
     static let red = CGColor(srgbRed: 0.82, green: 0.16, blue: 0.18, alpha: 1)
     static let teal = CGColor(srgbRed: 0.27, green: 0.68, blue: 0.66, alpha: 1)
@@ -49,88 +54,127 @@ enum Sprite {
         ctx.translateBy(x: 0, y: -middle)
         ctx.scaleBy(x: (2 - pose.squash) * pose.facing, y: pose.squash)
 
-        func px(_ c: Int, _ r: Int, _ w: Int = 1, _ h: Int = 1, _ color: CGColor = body) {
+        func px(_ c: CGFloat, _ r: CGFloat, _ w: CGFloat = 1, _ h: CGFloat = 1, _ color: CGColor = body) {
             ctx.setFillColor(color)
-            ctx.fill(CGRect(x: (CGFloat(c) - CGFloat(columns) / 2) * s, y: CGFloat(rows - r - h) * s,
-                            width: CGFloat(w) * s, height: CGFloat(h) * s))
+            ctx.fill(CGRect(x: (c - CGFloat(columns) / 2) * s, y: (CGFloat(rows) - r - h) * s, width: w * s, height: h * s))
         }
 
         if pose.costume == .ghost {
             let sheet = CGColor(srgbRed: 0.97, green: 0.97, blue: 1, alpha: 0.92)
-            px(4, -2, 10, 1, sheet)
-            px(3, -1, 12, 1, sheet)
-            px(2, 0, 14, 9, sheet)
-            for c in stride(from: 2, to: 16, by: 4) { px(c + (pose.armPhase ? 2 : 0), 9, 2, 1, sheet) }
-            px(5, 1, 2, 3, ink)
-            px(11, 1, 2, 3, ink)
-            px(8, 5, 2, pose.mouth > 0 ? 2 : 1, ink)
+            px(2, -1, 8, 1, sheet)
+            px(1, 0, 10, 7, sheet)
+            for c in stride(from: 1, to: 11, by: 3) { px(CGFloat(c) + (pose.armPhase ? 1.5 : 0), 7, 1.5, 1, sheet) }
+            px(3, 1, 1, 2, ink)
+            px(8, 1, 1, 2, ink)
+            px(5.5, 4, 1, pose.mouth > 0 ? 1 : 0.5, ink)
             return
         }
 
-        px(3, 0, 12, 8)
+        if let i = pose.laptopFrame, let laptop = Official.laptop, laptop.frames.indices.contains(i) {
+            let k = s / pixel
+            ctx.interpolationQuality = .none
+            ctx.draw(laptop.frames[i], in: CGRect(x: laptop.rect.minX * k, y: laptop.rect.minY * k,
+                                                  width: laptop.rect.width * k, height: laptop.rect.height * k))
+            return
+        }
+        if pose.sitting { return drawSitting(pose, in: ctx, pixel: s, hat: px) }
+
+        // Turned slightly towards where he walks: the back edge in shade and the face one pixel forward.
+        let t: CGFloat = pose.turned ? 1 : 0
+        px(2, 0, 8, 6)
+        if pose.turned { px(2, 0, 1, 6, shade) }
 
         switch pose.arms {
         case .down:
-            px(1, 4, 2, 2); px(15, 4, 2, 2)
+            if pose.turned { px(1, 2, 1, 2, shade) } else { px(0, 2, 2, 2) }
+            px(10, 2, 2, 2)
         case .up, .hold:
-            px(1, 2, 2, 2); px(0, 0, 2, 2); px(15, 2, 2, 2); px(16, 0, 2, 2)
+            px(0, 0, 2, 2); px(10, 0, 2, 2)
         case .wave:
-            px(1, 4, 2, 2); px(15, 2, 2, 2)
-            if pose.armPhase { px(16, 0, 2, 2) } else { px(17, 1, 1, 2) }
+            px(0, 2, 2, 2)
+            if pose.armPhase { px(10, 0, 2, 2) } else { px(10, 1, 2, 2) }
         case .reach:
-            px(1, 3, 2, 2); px(15, 4, 4, 2)
+            px(0, 2, 2, 2); px(10, 2, 3, 2)
         }
 
-        let legs: [(Int, Int)] = switch pose.legs {
-        case 1: [(4, 2), (6, 1), (11, 2), (13, 1)]
-        case 2: [(4, 1), (6, 2), (11, 1), (13, 2)]
-        case 3: [(4, 1), (6, 1), (11, 1), (13, 1)]
-        default: [(4, 2), (6, 2), (11, 2), (13, 2)]
+        let lift: [CGFloat] = switch pose.legs {
+        case 1: [2, 1, 2, 1]
+        case 2: [1, 2, 1, 2]
+        case 3: [1, 1, 1, 1]
+        default: [2, 2, 2, 2]
         }
-        for (c, h) in legs { px(c, 8, 1, h) }
+        for (i, c) in [2, 4, 7, 9].enumerated() { px(CGFloat(c), 6, 1, lift[i], pose.turned && c == 2 ? shade : body) }
 
-        let l = 5 + pose.look, r = 12 + pose.look
-        switch pose.eyes {
-        case .open: px(l, 2, 1, 2, ink); px(r, 2, 1, 2, ink)
-        case .blink: px(l, 3, 1, 1, ink); px(r, 3, 1, 1, ink)
-        case .closed: px(l - 1, 3, 2, 1, ink); px(r, 3, 2, 1, ink)
-        case .happy:
-            for c in [l, r] { px(c, 2, 1, 1, ink); px(c - 1, 3, 1, 1, ink); px(c + 1, 3, 1, 1, ink) }
-        case .wide:
-            px(l, 1, 2, 3, ink); px(r - 1, 1, 2, 3, ink); px(l, 1, 1, 1, white); px(r - 1, 1, 1, 1, white)
-        case .squint:
-            px(4, 1, 1, 1, ink); px(5, 2, 1, 1, ink); px(4, 3, 1, 1, ink)
-            px(13, 1, 1, 1, ink); px(12, 2, 1, 1, ink); px(13, 3, 1, 1, ink)
-        case .dizzy:
-            for c in [4, 11] {
-                px(c, 1, 1, 1, ink); px(c + 2, 1, 1, 1, ink); px(c + 1, 2, 1, 1, ink)
-                px(c, 3, 1, 1, ink); px(c + 2, 3, 1, 1, ink)
+        let look = CGFloat(pose.look) * 0.5
+        for e in [3 + t + look, 8 + t + look] {
+            switch pose.eyes {
+            case .open: px(e, 1, 1, 1, ink)
+            case .blink, .closed: px(e, 1.5, 1, 0.5, ink)
+            case .squint: px(e, 1.25, 1, 0.5, ink)
+            case .happy: px(e, 1, 1, 0.5, ink); px(e - 0.5, 1.5, 0.5, 0.5, ink); px(e + 1, 1.5, 0.5, 0.5, ink)
+            case .wide: px(e, 0.5, 1, 1.5, ink); px(e, 0.5, 0.5, 0.5, white)
+            case .dizzy: px(e, 1, 0.5, 0.5, ink); px(e + 0.5, 1.5, 0.5, 0.5, ink)
             }
         }
-        if pose.mouth > 0 { px(8, 5, 2, pose.mouth, ink) }
+        if pose.mouth > 0 { px(5.5 + t, 2.5, 1, 0.5 * CGFloat(pose.mouth), ink) }
 
-        switch pose.costume {
-        case .witch:
-            px(1, -1, 16, 1, hat)
-            px(5, -2, 8, 1, pumpkin)
-            px(5, -3, 8, 1, hat); px(6, -4, 6, 1, hat); px(7, -5, 4, 1, hat)
-            px(8, -6, 3, 1, hat); px(10, -7, 2, 1, hat); px(11, -8, 2, 1, hat)
+        drawHat(pose.costume, px)
+    }
+
+    private static func drawHat(_ costume: Costume, _ px: (CGFloat, CGFloat, CGFloat, CGFloat, CGColor) -> Void) {
+        switch costume {
         case .santa:
-            px(2, -1, 14, 1, white)
-            px(4, -2, 10, 1, red); px(5, -3, 8, 1, red); px(7, -4, 6, 1, red); px(10, -5, 4, 1, red)
-            px(13, -7, 2, 2, white)
+            px(2, -1, 8, 1, white)
+            px(3, -2, 6, 1, red); px(4, -3, 4, 1, red); px(6, -4, 3, 1, red)
+            px(8.5, -5, 1.5, 1.5, white)
         case .party:
-            px(6, -1, 6, 1, teal); px(7, -2, 4, 1, yellow); px(7, -3, 4, 1, teal)
-            px(8, -4, 2, 1, yellow); px(8, -5, 2, 1, teal); px(8, -7, 2, 2, red)
-        case .none, .ghost:
+            px(4, -1, 4, 1, teal); px(4.5, -2, 3, 1, yellow); px(5, -3, 2, 1, teal)
+            px(5.5, -4, 1, 1, yellow); px(5.5, -5, 1, 1, red)
+        case .none, .witch, .ghost:
+            // Halloween keeps the ghost and the greetings, but Clawd goes without the witch hat.
             break
         }
+    }
+
+    /// Clawd sitting side-on at his laptop, typing, in the half pixels of the official art:
+    /// a shaded back, one eye, the arm on the keyboard and the open laptop in front of him.
+    private static func drawSitting(_ pose: Pose, in ctx: CGContext, pixel s: CGFloat,
+                                    hat px: (CGFloat, CGFloat, CGFloat, CGFloat, CGColor) -> Void) {
+        let u = s / 2
+        func dot(_ c: Int, _ r: Int, _ w: Int, _ h: Int, _ color: CGColor) {
+            ctx.setFillColor(color)
+            ctx.fill(CGRect(x: CGFloat(c - 7) * u, y: CGFloat(14 - r - h) * u, width: CGFloat(w) * u, height: CGFloat(h) * u))
+        }
+
+        dot(5, 0, 10, 11, body)
+        dot(15, 0, 2, 3, body)
+        dot(15, 5, 2, 6, body)
+        dot(1, 0, 4, 11, shade)
+        dot(17, 9, 2, 2, body)
+
+        for (c, w, color) in [(1, 2, shade), (4, 2, body), (10, 2, body), (14, 2, body)] { dot(c, 11, w, 3, color) }
+        dot(0, 12, 1, 2, shade)
+
+        let lift = pose.armPhase ? 0 : 1
+        dot(17, 5 + lift, 4, 4, shade)
+        dot(17, 7 + lift, 3, 2, body)
+
+        switch pose.eyes {
+        case .blink, .closed: dot(7, 4, 2, 1, ink)
+        case .happy: dot(7, 3, 2, 1, ink); dot(6, 4, 1, 1, ink); dot(9, 4, 1, 1, ink)
+        case .wide: dot(7, 2, 2, 3, ink); dot(7, 2, 1, 1, white)
+        default: dot(7, 3, 2, 2, ink)
+        }
+
+        dot(18, 13, 6, 1, laptop)
+        for i in 0..<5 { dot(23 + i, 12 - i, 2, 1, laptop) }
+        drawHat(pose.costume, { c, r, w, h, color in px(c + 1, r + 1, w, h, color) })
     }
 
     static func icon() -> NSImage {
         let image = NSImage(size: NSSize(width: 22, height: 16), flipped: false) { _ in
             guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
-            draw(Pose(), at: CGPoint(x: 11, y: 2), in: ctx, pixel: 1.15)
+            draw(Pose(), at: CGPoint(x: 11, y: 2), in: ctx, pixel: 1.6)
             return true
         }
         return image

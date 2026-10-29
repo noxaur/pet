@@ -81,6 +81,14 @@ enum World {
         return CFUUIDCreateString(nil, uuid) as String
     }
 
+    /// Whether the Claude app is the one in use: it is the frontmost app and has a window open on
+    /// the current Desktop, not minimized or hidden.
+    static var claudeActive: Bool {
+        guard let front = NSWorkspace.shared.frontmostApplication,
+              front.bundleIdentifier == "com.anthropic.claudefordesktop" else { return false }
+        return windows().contains { $0.pid == front.processIdentifier }
+    }
+
     static var idleSeconds: Double {
         guard let any = CGEventType(rawValue: ~0) else { return 0 }
         return CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: any)

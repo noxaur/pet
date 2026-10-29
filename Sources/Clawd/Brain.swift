@@ -74,7 +74,7 @@ final class Brain {
             "fetch": { [self] in if try await !fetch() { c.say("no windows on other desktops. (or no CatWM?)") } },
             "party": party, "stroll": stroll, "look": lookAround, "climb": climb, "think": think, "peek": peek,
             "dance": dance, "sneeze": sneeze, "nap": nap, "curious": curious, "haunt": haunt, "flip": backflip,
-            "giggle": giggle, "hello": entrance
+            "giggle": giggle, "hello": entrance, "code": code
         ]
     }
 
@@ -87,6 +87,7 @@ final class Brain {
             if Int.random(in: 0..<5) < 2, try await fetch() { return }
             if try await drag() { return }
         }
+        if World.claudeActive { return try await code() }
         let mouse = NSEvent.mouseLocation
         let near = hypot(mouse.x - c.x, mouse.y - c.y) < 260
         let options: [(Double, () async throws -> Void)] = [
@@ -246,6 +247,45 @@ final class Brain {
         c.eyes = .closed
         c.say("*yaaawn*")
         try await c.pause(1.4)
+    }
+
+    /// While you use the Claude app, Clawd sits down at his laptop and types along. He gets up when
+    /// you switch to another app or Desktop, or after a while, so the loop can check on loans. With the Claude app
+    /// installed he plays its official laptop animation; otherwise he draws his own.
+    private func code() async throws {
+        c.sitting = true
+        c.lookAtMouse = false
+        let official = Official.laptop != nil
+        if official { try await play(Official.intro) }
+        c.say(["time to code!", "pair programming?", "i'll take the tests.", "let's ship something."].randomElement())
+        let end = now() + .random(in: 40...70)
+        var nextCheck = now() + 3, nextLine = now() + .random(in: 12...20)
+        try await c.until(timeout: 80) {
+            if now() > nextLine {
+                nextLine = now() + .random(in: 14...24)
+                c.say(["*clack clack clack*", "hmm, a type error.", "tests are green!", "refactoring...",
+                       "almost there.", "who wrote this? oh. me."].randomElement())
+            }
+            if official {
+                let typing = Official.typing
+                c.laptopFrame = typing.lowerBound + Int(now() * Official.fps) % typing.count
+            }
+            if now() > nextCheck {
+                nextCheck = now() + 0.3
+                if !World.claudeActive { return true }
+            }
+            return now() > end
+        }
+        if official { try await play(Official.outro) }
+        c.sitting = false
+        c.laptopFrame = nil
+    }
+
+    private func play(_ frames: ClosedRange<Int>) async throws {
+        for i in frames {
+            c.laptopFrame = i
+            try await c.pause(1 / Official.fps)
+        }
     }
 
     private func curious() async throws {

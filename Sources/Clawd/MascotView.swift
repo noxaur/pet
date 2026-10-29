@@ -40,7 +40,8 @@ final class MascotView: NSView {
         let feet = Self.feet
         if showsShadow {
             ctx.setFillColor(CGColor(gray: 0, alpha: 0.16))
-            ctx.fillEllipse(in: CGRect(x: feet.x - 38 * pose.scale, y: feet.y - 4, width: 76 * pose.scale, height: 8))
+            let half = Sprite.size.width * 0.42 * pose.scale
+            ctx.fillEllipse(in: CGRect(x: feet.x - half, y: feet.y - 4, width: half * 2, height: 8))
         }
         Sprite.draw(pose, at: feet, in: ctx)
         for particle in particles { draw(particle, in: ctx) }
@@ -85,7 +86,7 @@ final class MascotView: NSView {
         }
         guard let (_, string, fit) = measured else { return }
         let width = ceil(fit.width) + 18, height = ceil(fit.height) + 12
-        let hatRoom: CGFloat = pose.costume == .none || pose.costume == .ghost ? 12 : 48
+        let hatRoom: CGFloat = [.none, .witch, .ghost].contains(pose.costume) ? 12 : 48
         let base = Self.feet.y + Sprite.size.height * pose.scale + hatRoom
         let x = min(max(6, Self.feet.x - width / 2), bounds.width - width - 6)
         let box = CGRect(x: x, y: base + 8, width: width, height: height)

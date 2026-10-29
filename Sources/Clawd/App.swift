@@ -32,6 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let prompt = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
             AXIsProcessTrustedWithOptions([prompt: true] as CFDictionary)
         }
+        Official.load()
         clawd.baseCostume = Self.costume(on: Date())
         clawd.costume = clawd.baseCostume
         let screen = NSScreen.main ?? NSScreen.screens[0]
