@@ -1,0 +1,23 @@
+{
+  "pins" : [
+    {
+      "identity" : "permissionflow",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/noxaur/PermissionFlow",
+      "state" : {
+        "branch" : "main",
+        "revision" : "cb96db4bfd2342e8d8c56f2a7d51ca65b8aed6e2"
+      }
+    },
+    {
+      "identity" : "sparkle",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/sparkle-project/Sparkle",
+      "state" : {
+        "revision" : "ab7d71291238df6e0492143b120c9b696a35f603",
+        "version" : "2.10.1"
+      }
+    }
+  ],
+  "version" : 2
+}

@@ -83,7 +83,7 @@ final class Brain {
         if let window = loose.first(where: { time - $0.at > 160 }) { return try await tidy(window) }
         if let loan = loans.first(where: { time - $0.at > 200 }) { return try await giveBack(loan) }
         if World.idleSeconds > 150 { return try await nap() }
-        if mischief, time > nextMischief, AXIsProcessTrusted() {
+        if mischief, time > nextMischief, Permissions.accessibilityGranted {
             if Int.random(in: 0..<5) < 2, try await fetch() { return }
             if try await drag() { return }
         }

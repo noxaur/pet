@@ -23,15 +23,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let clawd = Clawd()
     let effects = Effects()
     lazy var brain = Brain(clawd: clawd, effects: effects)
+    let updates = Updates()
+    let permissions = Permissions()
     private var item: NSStatusItem?
     private var terminate: DispatchSourceSignal?
     static let command = Notification.Name("com.noxaur.clawd.do")
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        if !AXIsProcessTrusted() {
-            let prompt = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
-            AXIsProcessTrustedWithOptions([prompt: true] as CFDictionary)
-        }
+        if !Permissions.accessibilityGranted { permissions.requestAccessibility() }
         Official.load()
         clawd.baseCostume = Self.costume(on: Date())
         clawd.costume = clawd.baseCostume
@@ -112,6 +111,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         })
         menu.addItem(.separator())
+        let access = MenuAction("Grant Accessibility Access…") { [permissions] in permissions.requestAccessibility() }
+        access.needed = { !Permissions.accessibilityGranted }
+        menu.addItem(access)
+        menu.addItem(MenuAction("Check for Updates…") { [updates] in updates.check() })
         menu.addItem(MenuAction("Quit Clawd", key: "q") { NSApp.terminate(nil) })
         menu.delegate = self
         item.menu = menu
@@ -123,6 +126,7 @@ extension AppDelegate: NSMenuDelegate {
     func menuNeedsUpdate(_ menu: NSMenu) {
         for case let item as MenuAction in menu.items {
             if let update = item.update { item.state = update() }
+            if let needed = item.needed { item.isHidden = !needed() }
             if item.title.hasSuffix("Clawd"), item.title != "Quit Clawd" {
                 item.title = clawd.panel.isVisible ? "Hide Clawd" : "Show Clawd"
             }
@@ -133,6 +137,7 @@ extension AppDelegate: NSMenuDelegate {
 final class MenuAction: NSMenuItem {
     private let run: () -> Void
     var update: (() -> NSControl.StateValue)?
+    var needed: (() -> Bool)?
 
     init(_ title: String, key: String = "", run: @escaping () -> Void) {
         self.run = run
