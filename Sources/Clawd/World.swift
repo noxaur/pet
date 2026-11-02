@@ -1,4 +1,5 @@
 import AppKit
+import IOKit.pwr_mgt
 
 /// A window on the current Desktop, in AppKit coordinates (origin at the bottom left of the main display).
 struct Win {
@@ -81,12 +82,60 @@ enum World {
         return CFUUIDCreateString(nil, uuid) as String
     }
 
-    /// Whether the Claude app is the one in use: it is the frontmost app and has a window open on
+    /// Bundle identifiers, or their prefixes, of the Claude app and other AI coding apps,
+    /// so nightly, preview and insiders builds count too.
+    static let codingApps = [
+        "com.anthropic.claudefordesktop",
+        "com.t3tools.",                       // T3 Code
+        "com.todesktop.230313mzl4w4u92",      // Cursor
+        "com.exafunction.windsurf",           // Windsurf
+        "com.microsoft.VSCode",               // VS Code and Insiders
+        "dev.zed.Zed",                        // Zed and Zed Preview
+        "com.openai.codex",                   // Codex
+        "com.conductor.",                     // Conductor
+        "dev.kiro.",                          // Kiro
+        "com.trae.",                          // Trae
+        "com.cmuxterm.",                      // cmux
+        "dev.warp.",                          // Warp
+    ]
+
+    /// Whether an AI coding app is the one in use: it is the frontmost app and has a window open on
     /// the current Desktop, not minimized or hidden.
-    static var claudeActive: Bool {
-        guard let front = NSWorkspace.shared.frontmostApplication,
-              front.bundleIdentifier == "com.anthropic.claudefordesktop" else { return false }
+    static var codingAppActive: Bool {
+        guard let front = NSWorkspace.shared.frontmostApplication, let id = front.bundleIdentifier,
+              codingApps.contains(where: { id.hasPrefix($0) }) else { return false }
         return windows().contains { $0.pid == front.processIdentifier }
+    }
+
+    /// The screen on which the frontmost app plays a video fullscreen: one of its windows fills that screen
+    /// up to the camera notch, and the app, or one of its helpers, keeps the display awake, which players
+    /// and browsers do only while a video plays.
+    static var fullscreenVideoScreen: NSScreen? {
+        guard let front = NSWorkspace.shared.frontmostApplication else { return nil }
+        let screens = NSScreen.screens
+        func fills(_ window: CGRect, _ screen: NSScreen) -> Bool {
+            let frame = screen.frame
+            return abs(window.minX - frame.minX) < 1 && abs(window.width - frame.width) < 1
+                && abs(window.minY - frame.minY) < 1 && window.height >= frame.height - screen.safeAreaInsets.top - 1
+        }
+        let full = windows().lazy.filter { $0.pid == front.processIdentifier }
+            .compactMap { window in screens.first { fills(window.frame, $0) } }.first
+        guard let full, keepsDisplayAwake(front) else { return nil }
+        return full
+    }
+
+    private static func keepsDisplayAwake(_ app: NSRunningApplication) -> Bool {
+        var assertions: Unmanaged<CFDictionary>?
+        guard IOPMCopyAssertionsByProcess(&assertions) == kIOReturnSuccess,
+              let byProcess = assertions?.takeRetainedValue() as? [NSNumber: [[String: Any]]] else { return false }
+        let bundle = app.bundleURL.map { $0.path + "/" }
+        return byProcess.contains { pid, list in
+            guard list.contains(where: { ["PreventUserIdleDisplaySleep", "NoDisplaySleepAssertion"].contains($0["AssertType"] as? String) })
+            else { return false }
+            if pid.int32Value == app.processIdentifier { return true }
+            guard let bundle, let path = NSRunningApplication(processIdentifier: pid.int32Value)?.bundleURL?.path else { return false }
+            return path.hasPrefix(bundle)
+        }
     }
 
     static var idleSeconds: Double {

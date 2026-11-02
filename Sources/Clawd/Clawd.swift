@@ -41,6 +41,7 @@ final class Clawd: NSObject {
     var lookAtMouse = true
     var sitting = false
     var laptopFrame: Int?
+    var movie: Movie?
 
     var onGrab: (() -> Void)?
     var onThrownLanding: ((CGFloat) -> Void)?
@@ -220,6 +221,7 @@ final class Clawd: NSObject {
         lookAtMouse = true
         sitting = false
         laptopFrame = nil
+        movie = nil
         if !grounded && !held { platform = nil }
     }
 
@@ -424,6 +426,7 @@ final class Clawd: NSObject {
             pose.sitting = sitting && !pose.turned
             pose.laptopFrame = pose.sitting ? laptopFrame : nil
         }
+        pose.movie = movie == .watching && blinking ? .blink : movie
         pose.armPhase = Int(time / 0.2) % 2 == 0
         pose.mouth = mouth > 0 ? mouth : (bubble != nil && Int(time / 0.14) % 3 == 0 ? 1 : 0)
         if lookAtMouse, eyes == nil, !held {

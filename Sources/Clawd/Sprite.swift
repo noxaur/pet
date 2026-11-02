@@ -3,6 +3,7 @@ import AppKit
 enum Eyes: Equatable { case open, blink, closed, happy, wide, squint, dizzy }
 enum Arms: Equatable { case down, up, wave, reach, hold }
 enum Costume: Equatable { case none, witch, santa, party, ghost }
+enum Movie: Equatable { case watching, blink, laugh, gasp }
 
 struct Pose: Equatable {
     var facing: CGFloat = 1
@@ -20,6 +21,7 @@ struct Pose: Equatable {
     var turned = false
     var sitting = false
     var laptopFrame: Int?
+    var movie: Movie?
 }
 
 /// Clawd on the 12 × 8 pixel grid of the official Claude Code art: an 8-wide body, two square eyes,
@@ -36,6 +38,15 @@ enum Sprite {
     static let ink = CGColor(srgbRed: 0, green: 0, blue: 0, alpha: 1)
     static let white = CGColor(srgbRed: 1, green: 0.98, blue: 0.95, alpha: 1)
     static let laptop = ink
+    static let grey = CGColor(srgbRed: 0.47, green: 0.47, blue: 0.49, alpha: 1)
+    static let greyLight = CGColor(srgbRed: 0.60, green: 0.60, blue: 0.62, alpha: 1)
+    static let greyDark = CGColor(srgbRed: 0.34, green: 0.34, blue: 0.36, alpha: 1)
+    static let greyBack = CGColor(srgbRed: 0.25, green: 0.25, blue: 0.27, alpha: 1)
+    static let glow = CGColor(srgbRed: 0.35, green: 0.55, blue: 1.0, alpha: 1)
+    static let frame3D = CGColor(srgbRed: 0.97, green: 0.96, blue: 0.93, alpha: 1)
+    static let redLens = CGColor(srgbRed: 0.92, green: 0.15, blue: 0.20, alpha: 1)
+    static let blueLens = CGColor(srgbRed: 0.20, green: 0.62, blue: 0.95, alpha: 1)
+    static let blueEye = CGColor(srgbRed: 0.03, green: 0.15, blue: 0.32, alpha: 1)
     static let pumpkin = CGColor(srgbRed: 0.95, green: 0.64, blue: 0.23, alpha: 1)
     static let red = CGColor(srgbRed: 0.82, green: 0.16, blue: 0.18, alpha: 1)
     static let teal = CGColor(srgbRed: 0.27, green: 0.68, blue: 0.66, alpha: 1)
@@ -70,6 +81,7 @@ enum Sprite {
             return
         }
 
+        if let movie = pose.movie { return drawMovie(movie, in: ctx, pixel: s) }
         if let i = pose.laptopFrame, let laptop = Official.laptop, laptop.frames.indices.contains(i) {
             let k = s / pixel
             ctx.interpolationQuality = .none
@@ -169,6 +181,60 @@ enum Sprite {
         dot(18, 13, 6, 1, laptop)
         for i in 0..<5 { dot(23 + i, 12 - i, 2, 1, laptop) }
         drawHat(pose.costume, { c, r, w, h, color in px(c + 1, r + 1, w, h, color) })
+    }
+
+    /// Clawd reclining in a grey home-cinema chair with red and blue 3D glasses on, side-on like his laptop
+    /// pose, on half pixels with the floor at row 22: the back with its headrest, the seat, the footrest
+    /// with his legs stretched out on it, and the armrest along his side with a cup holder.
+    private static func drawMovie(_ look: Movie, in ctx: CGContext, pixel s: CGFloat) {
+        let u = s / 2
+        func dot(_ c: Int, _ r: Int, _ w: Int, _ h: Int, _ color: CGColor) {
+            ctx.setFillColor(color)
+            ctx.fill(CGRect(x: CGFloat(c - 12) * u, y: CGFloat(22 - r - h) * u, width: CGFloat(w) * u, height: CGFloat(h) * u))
+        }
+
+        dot(0, -3, 6, 1, greyBack); dot(-1, -2, 7, 5, greyBack)
+        dot(2, -3, 3, 1, grey); dot(2, -2, 4, 5, grey); dot(2, -2, 4, 1, greyLight)
+        dot(0, 3, 7, 6, greyBack); dot(3, 3, 4, 6, grey); dot(3, 3, 4, 1, greyDark)
+        dot(1, 9, 7, 8, greyBack); dot(4, 9, 4, 8, grey); dot(4, 9, 4, 1, greyDark)
+        dot(1, 14, 3, 3, greyBack); dot(4, 14, 16, 3, grey)
+
+        dot(6, 3, 4, 11, shade)
+        dot(10, 3, 10, 11, body)
+        dot(20, 3, 2, 3, body)
+        dot(20, 8, 2, 6, body)
+        if look == .laugh || look == .gasp { dot(20, 6, 2, look == .gasp ? 2 : 1, ink) }
+
+        // The blue lens over the eye we see, the red one peeking past his face, the arm back to his ear.
+        dot(6, 5, 5, 1, frame3D)
+        dot(10, 4, 6, 4, frame3D)
+        dot(11, 5, 4, 2, blueLens)
+        dot(15, 4, 7, 1, frame3D)
+        dot(20, 4, 3, 3, frame3D)
+        dot(21, 5, 2, 1, redLens)
+        switch look {
+        case .watching: dot(12, 5, 2, 2, blueEye)
+        case .blink: dot(12, 6, 2, 1, blueEye)
+        case .laugh: dot(12, 5, 2, 1, blueEye)
+        case .gasp: dot(12, 5, 2, 2, blueEye); dot(11, 5, 1, 1, blueEye)
+        }
+
+        dot(18, 14, 10, 2, grey); dot(18, 14, 10, 1, greyLight); dot(27, 14, 1, 2, greyDark)
+        dot(23, 16, 2, 3, ink)
+        dot(22, 11, 5, 1, shade)
+        dot(22, 12, 6, 2, body)
+
+        dot(3, 10, 3, 6, greyBack)
+        dot(6, 10, 13, 6, grey)
+        dot(6, 10, 13, 1, greyLight)
+        dot(6, 15, 13, 1, greyDark)
+        dot(16, 10, 2, 1, ink)
+        dot(12, 8, 5, 2, shade)
+        dot(12, 9, 4, 1, body)
+
+        dot(1, 17, 21, 3, greyBack)
+        dot(1, 20, 21, 1, ink)
+        dot(2, 21, 19, 1, glow)
     }
 
     static func icon() -> NSImage {

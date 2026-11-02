@@ -8,7 +8,9 @@ Clawd is a small orange pixel creature who lives on your desktop. He walks on th
 
 Pick him up and throw him. Click him, double-click him, or click him five times fast. From mid-October to 1 November he sometimes haunts your windows as a ghost.
 
-While you use the Claude app, he sits down at his laptop and types along. He packs up when you switch to another app or Desktop. With the Claude app installed he plays its official laptop animation, read from the app at launch and not shipped with Clawd; without it he draws his own.
+While you use the Claude app or another AI coding app (T3 Code, Cursor, Windsurf, VS Code, Zed, Codex, Conductor, Kiro, Trae, cmux, Warp), he sits down at his laptop and types along. He packs up when you switch to another app or Desktop. With the Claude app installed he plays its official laptop animation, read from the app at launch and not shipped with Clawd; without it he draws his own.
+
+While a video plays fullscreen, he walks to the bottom right corner and watches from a cinema recliner with red and blue 3D glasses on. He gets up when the video stops or leaves fullscreen.
 
 ## Install
 
@@ -36,7 +38,7 @@ The menu bar icon has Drag, Fetch, Give Everything Back, Party, Mischief (on or 
 build/Clawd.app/Contents/MacOS/Clawd do fetch
 ```
 
-The behaviours are `drag`, `fetch`, `giveback`, `party`, `stroll`, `look`, `climb`, `think`, `peek`, `dance`, `sneeze`, `nap`, `curious`, `haunt`, `flip`, `giggle`, `hello` and `code`.
+The behaviours are `drag`, `fetch`, `giveback`, `party`, `stroll`, `look`, `climb`, `think`, `peek`, `dance`, `sneeze`, `nap`, `curious`, `haunt`, `flip`, `giggle`, `hello`, `code` and `movie`.
 
 ## Code
 

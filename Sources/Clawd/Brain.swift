@@ -31,6 +31,7 @@ final class Brain {
     private var nextMischief = now() + 20
     private var clicks: [Double] = []
     private var busy = false
+    private var watching = false
 
     init(clawd: Clawd, effects: Effects) {
         c = clawd
@@ -38,6 +39,13 @@ final class Brain {
         c.onGrab = { [weak self] in self?.stop() }
         c.onThrownLanding = { [weak self] impact in self?.start { try await self?.recover(impact) } }
         c.onClick = { [weak self] count in self?.clicked(count) }
+        // A fullscreen video interrupts whatever he is doing, so he is in his seat within a second or two.
+        Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, !self.watching, !self.busy, !self.c.held, World.fullscreenVideoScreen != nil else { return }
+                self.start(self.movie)
+            }
+        }
     }
 
     func start(_ first: (() async throws -> Void)? = nil) {
@@ -74,11 +82,12 @@ final class Brain {
             "fetch": { [self] in if try await !fetch() { c.say("no windows on other desktops. (or no CatWM?)") } },
             "party": party, "stroll": stroll, "look": lookAround, "climb": climb, "think": think, "peek": peek,
             "dance": dance, "sneeze": sneeze, "nap": nap, "curious": curious, "haunt": haunt, "flip": backflip,
-            "giggle": giggle, "hello": entrance, "code": code
+            "giggle": giggle, "hello": entrance, "code": code, "movie": movie
         ]
     }
 
     private func next() async throws {
+        if World.fullscreenVideoScreen != nil { return try await movie() }
         let time = now()
         if let window = loose.first(where: { time - $0.at > 160 }) { return try await tidy(window) }
         if let loan = loans.first(where: { time - $0.at > 200 }) { return try await giveBack(loan) }
@@ -87,7 +96,7 @@ final class Brain {
             if Int.random(in: 0..<5) < 2, try await fetch() { return }
             if try await drag() { return }
         }
-        if World.claudeActive { return try await code() }
+        if World.codingAppActive { return try await code() }
         let mouse = NSEvent.mouseLocation
         let near = hypot(mouse.x - c.x, mouse.y - c.y) < 260
         let options: [(Double, () async throws -> Void)] = [
@@ -249,7 +258,7 @@ final class Brain {
         try await c.pause(1.4)
     }
 
-    /// While you use the Claude app, Clawd sits down at his laptop and types along. He gets up when
+    /// While you use the Claude app or another AI coding app, Clawd sits down at his laptop and types along. He gets up when
     /// you switch to another app or Desktop, or after a while, so the loop can check on loans. With the Claude app
     /// installed he plays its official laptop animation; otherwise he draws his own.
     private func code() async throws {
@@ -272,7 +281,7 @@ final class Brain {
             }
             if now() > nextCheck {
                 nextCheck = now() + 0.3
-                if !World.claudeActive { return true }
+                if !World.codingAppActive { return true }
             }
             return now() > end
         }
@@ -285,6 +294,46 @@ final class Brain {
         for i in frames {
             c.laptopFrame = i
             try await c.pause(1 / Official.fps)
+        }
+    }
+
+    /// While a video plays fullscreen, Clawd walks to the bottom right corner of that screen and watches
+    /// from a cinema recliner with 3D glasses on, now and then laughing or gasping. He gets up when the
+    /// video stops or leaves fullscreen.
+    private func movie() async throws {
+        watching = true
+        defer { watching = false }
+        let screen = World.fullscreenVideoScreen ?? c.screen
+        let seat = CGPoint(x: screen.frame.maxX - 42, y: screen.frame.minY)
+        c.lookAtMouse = false
+        try await c.until(timeout: 3) { c.grounded }
+        if abs(c.x - seat.x) > 2 { try await c.walk(to: seat.x, speed: 140) }
+        c.puppet = true
+        let start = CGPoint(x: c.x, y: c.y)
+        c.movie = .watching
+        c.facing = -1
+        c.squash = 0.85
+        try await c.drive(0.25) { [c] t in
+            c.x = start.x + (seat.x - start.x) * t
+            c.y = start.y + (seat.y - start.y) * t
+        }
+        defer {
+            c.movie = nil
+            c.settle()
+        }
+        var nextCheck = now() + 0.5, nextReaction = now() + .random(in: 20...45), reactionEnds = 0.0
+        try await c.until(timeout: 60 * 60 * 4) {
+            if now() > reactionEnds { c.movie = .watching }
+            if now() > nextReaction {
+                c.movie = Bool.random() ? .laugh : .gasp
+                reactionEnds = now() + 1.6
+                nextReaction = now() + .random(in: 25...60)
+            }
+            if now() > nextCheck {
+                nextCheck = now() + 0.5
+                if World.fullscreenVideoScreen == nil { return true }
+            }
+            return false
         }
     }
 
